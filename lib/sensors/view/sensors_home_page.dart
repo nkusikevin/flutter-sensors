@@ -8,17 +8,14 @@ class SensorsHomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Sensors'),
-        backgroundColor: Colors.transparent,
-      ),
+      
       body: SingleChildScrollView(
         child: Column(
           children: [
             // Header section with gradient
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(24, 120, 24, 40),
+              padding: const EdgeInsets.fromLTRB(24, 100, 24, 32),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -36,18 +33,20 @@ class SensorsHomePage extends StatelessWidget {
                     'Device Sensors',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.3,
+                      height: 1.1,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Explore and test your device capabilities',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 16,
+                      color: Colors.white.withOpacity(0.85),
+                      fontSize: 15,
                       fontWeight: FontWeight.w400,
+                      height: 1.4,
                     ),
                   ),
                 ],
