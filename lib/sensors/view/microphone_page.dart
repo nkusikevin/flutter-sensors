@@ -36,44 +36,117 @@ class _MicrophonePageState extends State<MicrophonePage> {
   }
 
   Future<void> _checkMicrophonePermission() async {
-    final status = await Permission.microphone.status;
+    // Check both permission systems to ensure compatibility
+    final permissionStatus = await Permission.microphone.status;
+    final hasRecorderPermission = await _audioRecorder.hasPermission();
+
     setState(() {
-      _isPermissionGranted = status.isGranted;
+      _isPermissionGranted =
+          permissionStatus.isGranted && hasRecorderPermission;
     });
+
+    // If permission_handler says granted but recorder doesn't, try requesting again
+    if (permissionStatus.isGranted && !hasRecorderPermission) {
+      await _requestMicrophonePermission();
+    }
   }
 
   Future<void> _requestMicrophonePermission() async {
-    final status = await Permission.microphone.request();
-    setState(() {
-      _isPermissionGranted = status.isGranted;
-    });
+    try {
+      // Request permission using permission_handler first
+      final status = await Permission.microphone.request();
+
+      // Then check with the audio recorder
+      final hasRecorderPermission = await _audioRecorder.hasPermission();
+
+      setState(() {
+        _isPermissionGranted = status.isGranted && hasRecorderPermission;
+      });
+
+      // If still no permission, show helpful message
+      if (!_isPermissionGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Microphone permission is required to record audio. Please enable it in app settings.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error requesting microphone permission: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error requesting permission: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _startRecording() async {
     try {
-      if (await _audioRecorder.hasPermission()) {
-        final directory = await getTemporaryDirectory();
-        final filePath = '${directory.path}/audio_recording.m4a';
+      // Double-check permissions before starting
+      if (!_isPermissionGranted || !await _audioRecorder.hasPermission()) {
+        await _checkMicrophonePermission();
+        if (!_isPermissionGranted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Microphone permission is required to start recording.'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+      }
 
-        final audioConfig = RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 128000,
-          sampleRate: 44100,
+      final directory = await getTemporaryDirectory();
+      final filePath =
+          '${directory.path}/audio_recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      final audioConfig = RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        sampleRate: 44100,
+      );
+
+      await _audioRecorder.start(audioConfig, path: filePath);
+
+      setState(() {
+        _isRecording = true;
+        _isPaused = false;
+        _recordingDuration = 0;
+        _recordedFilePath = filePath;
+      });
+
+      _startTimer();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Recording started'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+          ),
         );
-
-        await _audioRecorder.start(audioConfig, path: filePath);
-
-        setState(() {
-          _isRecording = true;
-          _isPaused = false;
-          _recordingDuration = 0;
-          _recordedFilePath = filePath;
-        });
-
-        _startTimer();
       }
     } catch (e) {
       debugPrint('Error starting recording: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error starting recording: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -261,16 +334,61 @@ class _MicrophonePageState extends State<MicrophonePage> {
               ),
             )
           : Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('Microphone permission is required'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _requestMicrophonePermission,
-                    child: const Text('Grant Permission'),
-                  ),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.mic_off,
+                      size: 80,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Microphone Permission Required',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'This app needs access to your microphone to record audio. Please grant permission to continue.',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _requestMicrophonePermission,
+                          icon: const Icon(Icons.mic),
+                          label: const Text('Grant Permission'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            await openAppSettings();
+                          },
+                          icon: const Icon(Icons.settings),
+                          label: const Text('App Settings'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: _checkMicrophonePermission,
+                      child: const Text('Refresh Permission Status'),
+                    ),
+                  ],
+                ),
               ),
             ),
     );
